@@ -1,2 +1,49 @@
 # ComfyUI_PNGInfo_Sidebar
-ComfyUI custom extension that adds a sidebar for easy viewing of PNG file metadata
+
+### Description:
+ComfyUI custom frontend extension that adds a sidebar for easy viewing of PNG file metadata.
+
+### Why is this needed:
+If you have a lot of images generated in **Forge**, you switched to **СomfyUI**, and you really miss the **PNGInfo tab**, then this extension will help you.
+The extension adds a tab on the left, which, when opened, will open a convenient window for viewing PNG image metadata.
+Just click on the button/image and open the image. Or drag the image to this part of the window to open it.
+
+![image](https://github.com/user-attachments/assets/ab73986e-c35e-4206-b3e5-1a4017acf180)
+
+### Advantages:
+Allows you to conveniently view information without stopping the workflow.
+
+### Disadvantages:
+- The extension can only read PNG files so far.
+- Metadata created by **Forge** and **СomfyUI** is supported, but opening files saved by standard **СomfyUI** tools may cause problems due to **СomfyUI** specific approach to storing information.
+
+## How to install?
+
+### Method 1: Manual
+In Windows:
+- run `cmd`, go to the ComfyUI folder
+- `cd custom_nodes`
+- `git clone https://github.com/KLL535/ComfyUI_PNGInfo_Sidebar.git`
+- `cd pnginfo_sidebar`
+- Start/restart ComfyUI
+
+## Settings sections
+
+![image](https://github.com/user-attachments/assets/d70c20a0-0cdd-4163-addc-6d88f7e14d4d)
+![image](https://github.com/user-attachments/assets/d606bd61-190e-49e9-9cae-a23d86b3075d)
+
+General:
+- `Font Name` - You can customize the font, for example `georgia italic bold`.
+- `Font Size` - You can customize the font size.
+- `Image Size` - You can customize the image size.
+- `Enable (after restart)` - You can disable this tab (will work after restart).
+Colors:
+- `Color Text` - You can change the color of the main text.
+- `Color File` - You can change the color of file names.
+- `Color Number` - You can change the color of numbera.
+- `Color Header` - You can change the color of headers.
+Colors (Dark Theme)
+Same for dark theme.
+
+- [!] Tested on Windows only. Tested on **Forge** and **СomfyUI** metadata only. Open only PNG files.
+  
