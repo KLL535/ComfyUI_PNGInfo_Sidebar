@@ -24,7 +24,6 @@ In Windows:
 - run `cmd`, go to the ComfyUI folder
 - `cd custom_nodes`
 - `git clone https://github.com/KLL535/ComfyUI_PNGInfo_Sidebar.git`
-- `cd pnginfo_sidebar`
 - Start/restart ComfyUI
 
 ## Settings sections
