@@ -1,0 +1,14 @@
+[project]
+name = "pnginfo_sidebar"
+description = "Frontend extension that adds a sidebar for easy viewing of PNG file metadata."
+version = "1.0.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/KLL535/ComfyUI_PNGInfo_Sidebar"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "kll535"
+DisplayName = "ComfyUI_PNGInfo_Sidebar"
+Icon = ""
