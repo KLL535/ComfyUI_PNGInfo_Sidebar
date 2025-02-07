@@ -37,13 +37,12 @@ General:
 - `Font Size` - You can customize the font size.
 - `Image Size` - You can customize the image size.
 - `Enable (after restart)` - You can disable this tab (will work after restart).
-Colors:
+  
+Colors / Colors (Dark Theme):
 - `Color Text` - You can change the color of the main text.
 - `Color File` - You can change the color of file names.
 - `Color Number` - You can change the color of numbera.
 - `Color Header` - You can change the color of headers.
-Colors (Dark Theme)
-Same for dark theme.
 
-- [!] Tested on Windows only. Tested on **Forge** and **СomfyUI** metadata only. Open only PNG files.
+[!] Tested on Windows only. Tested on **Forge** and **СomfyUI** metadata only. Open only PNG files.
   
