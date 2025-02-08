@@ -110,7 +110,7 @@ export class ImageUploader {
         const file = e.target.files[0];
         if (!file) return;
 
-        const allowedExtensions = ['image/png'];
+        const allowedExtensions = ['image/png', 'image/jpeg'];
         const isImage = allowedExtensions.includes(file.type);
 
         if (isImage) {
@@ -169,12 +169,11 @@ export class ImageUploader {
                 const pngData = await this.readPNGMetadata(file);
                 return { ...baseMetadata, ...pngData };
             }
-            
-            //not supported
-            /*if (file.type === 'image/jpeg') {
+
+            if (file.type === 'image/jpeg') {
                 const exifData = await this.readEXIFMetadata(file);
                 return { ...baseMetadata, ...exifData };
-            }*/
+            }
             
         } catch (error) {
             const error_text = `Error in readMetadata`;
@@ -195,7 +194,7 @@ export class ImageUploader {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const metadata = pngMetadata.getFromPngBuffer(data);
-                    resolve(this.formatPNGMetadata(metadata));
+                    resolve(this.parceMetadata(metadata));
                 } catch (error) {
                     reject(error);
                 }
@@ -206,8 +205,8 @@ export class ImageUploader {
 
     ///////////////////////////////////////////
 
-    formatPNGMetadata(metadata) {   
-        this.log('ImageUploader formatPNGMetadata'); 
+    parceMetadata(metadata) {   
+        this.log('ImageUploader parceMetadata'); 
         this.log(metadata);
 
         let result = {};
@@ -299,4 +298,142 @@ export class ImageUploader {
         this.innerContainer.removeEventListener('drop', preventDefault);
         this.container.innerHTML = '';
     }
+
+    ///////////////////////////////////////////
+
+    async readEXIFMetadata(file) {
+        this.log('ImageUploader readEXIFMetadata'); 
+
+        const buffer = await file.arrayBuffer();
+        var dataView = new DataView(buffer);
+
+        this.log("Got buffer of length " + buffer.byteLength);
+        if ((dataView.getUint8(0) != 0xFF) || (dataView.getUint8(1) != 0xD8)) {
+            this.log("Not a valid JPEG");
+            return false; // not a valid jpeg
+        }
+
+        var offset = 2,
+            length = buffer.byteLength,
+            marker;
+
+        while (offset < length) {
+            if (dataView.getUint8(offset) != 0xFF) {
+                this.log("Not a valid marker at offset " + offset + ", found: " + dataView.getUint8(offset));
+                return false; // not a valid marker, something is wrong
+            }
+
+            marker = dataView.getUint8(offset + 1);
+            this.log(marker);
+
+            if (marker == 225) {
+                this.log("Found 0xFFE1 marker");
+                return this.readEXIFData(dataView, offset + 4, dataView.getUint16(offset + 2) - 2);
+            } else {
+                offset += 2 + dataView.getUint16(offset+2);
+            }
+
+        }
+
+    }
+
+    readEXIFData(file, start) {
+
+        this.log('ImageUploader readEXIFData'); 
+
+        var EXIF = function(obj) {
+            if (obj instanceof EXIF) return obj;
+            if (!(this instanceof EXIF)) return new EXIF(obj);
+            this.EXIFwrapped = obj;
+        };
+
+        var TiffTags = EXIF.TiffTags = { 0x8769 : "ExifIFDPointer" };
+        var ExifTags = EXIF.Tags = { 0x9286 : "UserComment" };
+
+        function readTagValue(file, entryOffset, tiffStart, dirStart, bigEnd) {
+            var type = file.getUint16(entryOffset+2, !bigEnd),
+                numValues = file.getUint32(entryOffset+4, !bigEnd),
+                valueOffset = file.getUint32(entryOffset+8, !bigEnd) + tiffStart,
+                offset;
+
+            switch (type) {
+                case 7: // undefined, 8-bit byte, value depending on field
+                    offset = numValues > 4 ? valueOffset : (entryOffset + 8);
+                    return getStringFromDB(file, offset + 7, numValues-8);
+
+                case 4: // long, 32 bit int
+                    if (numValues == 1) {
+                        return file.getUint32(entryOffset + 8, !bigEnd);
+                    } 
+            }
+        }
+
+        function readTags(file, tiffStart, dirStart, strings, bigEnd) {
+            var entries = file.getUint16(dirStart, !bigEnd),
+                tags = {},
+                entryOffset, tag,
+                i;
+
+            for (i=0;i<entries;i++) {
+                entryOffset = dirStart + i*12 + 2;
+                tag = strings[file.getUint16(entryOffset, !bigEnd)];
+                tags[tag] = readTagValue(file, entryOffset, tiffStart, dirStart, bigEnd);
+            }
+            return tags;
+        }
+
+        function getStringFromDB(buffer, start, length) {
+            var outstr = "";
+            for (var n = start; n < start+length; n++) {
+                outstr += String.fromCharCode(buffer.getUint8(n));
+            }
+            return outstr;
+        }
+
+        if (getStringFromDB(file, start, 4) != "Exif") {
+            this.log("Not valid EXIF data! " + getStringFromDB(file, start, 4));
+            return false;
+        }
+
+        var bigEnd,
+            tags = {}, 
+            tag,
+            tiffOffset = start + 6;
+
+        // test for TIFF validity and endianness
+        if (file.getUint16(tiffOffset) == 0x4949) {
+            bigEnd = false;
+        } else if (file.getUint16(tiffOffset) == 0x4D4D) {
+            bigEnd = true;
+        } else {
+            this.log("Not valid TIFF data! (no 0x4949 or 0x4D4D)");
+            return false;
+        }
+
+        if (file.getUint16(tiffOffset+2, !bigEnd) != 0x002A) {
+            this.log("Not valid TIFF data! (no 0x002A)");
+            return false;
+        }
+
+        var firstIFDOffset = file.getUint32(tiffOffset+4, !bigEnd);
+
+        if (firstIFDOffset < 0x00000008) {
+            this.log("Not valid TIFF data! (First offset less than 8)", file.getUint32(tiffOffset+4, !bigEnd));
+            return false;
+        }
+
+        const tiff = readTags(file, tiffOffset, tiffOffset + firstIFDOffset, TiffTags, bigEnd);
+
+        if (tiff.ExifIFDPointer) {
+            const exifData = readTags(file, tiffOffset, tiffOffset + tiff.ExifIFDPointer, ExifTags, bigEnd);
+            for (tag in exifData) {
+                tags["parameters"] = exifData[tag];
+            }
+        }
+
+        this.log(tags);
+
+        return this.parceMetadata(tags);
+    }
+
 }

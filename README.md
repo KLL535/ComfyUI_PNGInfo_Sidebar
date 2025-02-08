@@ -14,8 +14,7 @@ Just click on the button/image and open the image. Or drag the image to this par
 Allows you to conveniently view information without stopping the workflow.
 
 ### Disadvantages:
-- The extension can only read PNG files so far.
-- Metadata created by **Forge** and **СomfyUI** is supported, but opening files saved by standard **СomfyUI** tools may cause problems due to **СomfyUI** specific approach to storing information.
+- Metadata created by **СomfyUI** is supported, but files saved by standard **СomfyUI** tools may cause problems due to **СomfyUI** specific approach to storing information. Depending on the workspace, there may be no prompt at all in the metadata, or there may be 9 of them stored and all of them are incorrect.
 
 ## How to install?
 
@@ -47,5 +46,5 @@ Colors / Colors (Dark Theme):
 - `Color Number` - You can change the color of numbers.
 - `Color Header` - You can change the color of headers.
 
-[!] Tested on Windows only. Tested on **Forge** and **СomfyUI** metadata only. Open only PNG files.
+[!] Tested on Windows only. Tested on **Forge** and **СomfyUI** metadata only. 
   
