@@ -8,7 +8,7 @@ If you have a lot of images generated in **Forge**, you switched to **СomfyUI**
 The extension adds a tab on the left, which, when opened, will open a convenient window for viewing PNG image metadata.
 Just click on the button/image and open the image. Or drag the image to this part of the window to open it.
 
-![image](https://github.com/user-attachments/assets/ab73986e-c35e-4206-b3e5-1a4017acf180)
+![image](https://github.com/user-attachments/assets/a5f4f352-63ba-43c0-9a26-74e3b285b481)
 
 ### Advantages:
 Allows you to conveniently view information without stopping the workflow.
@@ -30,6 +30,7 @@ In Windows:
 - Start/restart ComfyUI
 
 ## Settings sections
+Look for **PNGInfo** tab: 
 
 ![image](https://github.com/user-attachments/assets/d70c20a0-0cdd-4163-addc-6d88f7e14d4d)
 ![image](https://github.com/user-attachments/assets/d606bd61-190e-49e9-9cae-a23d86b3075d)
@@ -43,7 +44,7 @@ General:
 Colors / Colors (Dark Theme):
 - `Color Text` - You can change the color of the main text.
 - `Color File` - You can change the color of file names.
-- `Color Number` - You can change the color of numbera.
+- `Color Number` - You can change the color of numbers.
 - `Color Header` - You can change the color of headers.
 
 [!] Tested on Windows only. Tested on **Forge** and **СomfyUI** metadata only. Open only PNG files.
