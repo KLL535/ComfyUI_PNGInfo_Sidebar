@@ -19,7 +19,10 @@ Allows you to conveniently view information without stopping the workflow.
 
 ## How to install?
 
-### Method 1: Manual
+### Method 1: Manager (Recommended)
+If you have *ComfyUI-Manager*, you can click `Custom Nodes Manager` and find `ComfyUI_PNGInfo_Sidebar`.
+
+### Method 2: Manual
 In Windows:
 - run `cmd`, go to the ComfyUI folder
 - `cd custom_nodes`
