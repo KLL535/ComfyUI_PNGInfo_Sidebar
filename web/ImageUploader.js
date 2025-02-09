@@ -160,8 +160,8 @@ export class ImageUploader {
     async readMetadata(file) {
         this.log('ImageUploader readMetadata');
         const baseMetadata = {
-            //'File name': file.name,
-            //'Last change': new Date(file.lastModified).toLocaleString()
+            //'File name: ': file.name,
+            //'Last change: ': new Date(file.lastModified).toLocaleString()
         };
 
         try {
@@ -186,21 +186,29 @@ export class ImageUploader {
 
     ///////////////////////////////////////////
 
-    async readPNGMetadata(file) {
-        this.log('ImageUploader readPNGMetadata');
+    readFileAsArrayBuffer(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const metadata = pngMetadata.getFromPngBuffer(data);
-                    resolve(this.parceMetadata(metadata));
-                } catch (error) {
-                    reject(error);
-                }
-            };
+
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Error reading file'));
+
             reader.readAsArrayBuffer(file);
         });
+    }
+
+    async readPNGMetadata(file) {
+        this.log('ImageUploader readPNGMetadata');
+
+        try {
+            const arrayBuffer = await this.readFileAsArrayBuffer(file);
+            const data = new Uint8Array(arrayBuffer);
+            const metadata = pngMetadata.getFromPngBuffer(data);
+            return this.parceMetadata(metadata);
+        } catch (error) {
+            console.error('Error reading metadata:', error);
+            throw error; 
+        }
     }
 
     ///////////////////////////////////////////
@@ -242,7 +250,7 @@ export class ImageUploader {
         }
 
         if (Object.keys(result).length === 0) {
-            const error_text = "No parameters or prompt sections in metadata";
+            const error_text = "None";
             result["Error"] = `${error_text}`;
         }
 
@@ -302,35 +310,46 @@ export class ImageUploader {
     ///////////////////////////////////////////
 
     async readEXIFMetadata(file) {
-        this.log('ImageUploader readEXIFMetadata'); 
+        this.log('ImageUploader readEXIFMetadata');
 
-        const buffer = await file.arrayBuffer();
-        var dataView = new DataView(buffer);
+        try {
+            const arrayBuffer = await this.readFileAsArrayBuffer(file);
+            const data = new DataView(arrayBuffer);
+            const metadata = this.getFromEXIFBuffer(data);
+            return this.parceMetadata(metadata);
+        } catch (error) {
+            console.error('Error reading metadata:', error);
+            throw error; 
+        }
+    }
 
-        this.log("Got buffer of length " + buffer.byteLength);
-        if ((dataView.getUint8(0) != 0xFF) || (dataView.getUint8(1) != 0xD8)) {
+    getFromEXIFBuffer(data) {
+        this.log('ImageUploader getFromEXIFBuffer'); 
+
+        this.log("Got buffer of length " + data.byteLength);
+        if ((data.getUint8(0) != 0xFF) || (data.getUint8(1) != 0xD8)) {
             this.log("Not a valid JPEG");
             return false; // not a valid jpeg
         }
 
         var offset = 2,
-            length = buffer.byteLength,
+            length = data.byteLength,
             marker;
 
         while (offset < length) {
-            if (dataView.getUint8(offset) != 0xFF) {
-                this.log("Not a valid marker at offset " + offset + ", found: " + dataView.getUint8(offset));
+            if (data.getUint8(offset) != 0xFF) {
+                this.log("Not a valid marker at offset " + offset + ", found: " + data.getUint8(offset));
                 return false; // not a valid marker, something is wrong
             }
 
-            marker = dataView.getUint8(offset + 1);
+            marker = data.getUint8(offset + 1);
             this.log(marker);
 
             if (marker == 225) {
                 this.log("Found 0xFFE1 marker");
-                return this.readEXIFData(dataView, offset + 4, dataView.getUint16(offset + 2) - 2);
+                return this.readEXIFData(data, offset + 4, data.getUint16(offset + 2) - 2);
             } else {
-                offset += 2 + dataView.getUint16(offset+2);
+                offset += 2 + data.getUint16(offset+2);
             }
 
         }
@@ -358,13 +377,16 @@ export class ImageUploader {
 
             switch (type) {
                 case 7: // undefined, 8-bit byte, value depending on field
-                    offset = numValues > 4 ? valueOffset : (entryOffset + 8);
-                    return getStringFromDB(file, offset + 7, numValues-8);
+                    if (numValues > 6) {
+                        return decodeUTF16(file, valueOffset, numValues-1);
+                    }
+                    break;
 
                 case 4: // long, 32 bit int
                     if (numValues == 1) {
                         return file.getUint32(entryOffset + 8, !bigEnd);
                     } 
+                    break;
             }
         }
 
@@ -382,16 +404,38 @@ export class ImageUploader {
             return tags;
         }
 
-        function getStringFromDB(buffer, start, length) {
-            var outstr = "";
-            for (var n = start; n < start+length; n++) {
-                outstr += String.fromCharCode(buffer.getUint8(n));
-            }
-            return outstr;
+        function decodeAscii(buffer, start, length) {
+            const decoder = new TextDecoder('ascii'); 
+            const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset + start, length);
+            return decoder.decode(uint8Array);
         }
 
-        if (getStringFromDB(file, start, 4) != "Exif") {
-            this.log("Not valid EXIF data! " + getStringFromDB(file, start, 4));
+        function decodeUTF16(buffer, start, length) {
+
+            const text = decodeAscii(buffer, start, 7);
+
+            if (text != "UNICODE") {
+                console.error(`Invalid format: Expected 'UNICODE' at the beginning, read: ${text}`); 
+                return "";
+            }
+
+            const utf16Decoder = new TextDecoder('utf-16le');
+            const textStart = start + 7; 
+            const textLength = length - 7; 
+
+            if (textLength <= 0) {
+                console.error(`No data for decoding`);
+                return ""; 
+            }
+
+            const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset + textStart, textLength);
+            const decodedText = utf16Decoder.decode(uint8Array);
+
+            return decodedText;
+        }
+
+        if (decodeAscii(file, start, 4) != "Exif") {
+            this.log("Not valid EXIF data! " + decodeAscii(file, start, 4));
             return false;
         }
 
@@ -415,6 +459,8 @@ export class ImageUploader {
             return false;
         }
 
+        this.log("Valid TIFF data!"); 
+
         var firstIFDOffset = file.getUint32(tiffOffset+4, !bigEnd);
 
         if (firstIFDOffset < 0x00000008) {
@@ -433,7 +479,7 @@ export class ImageUploader {
 
         this.log(tags);
 
-        return this.parceMetadata(tags);
+        return tags;
     }
 
 }
