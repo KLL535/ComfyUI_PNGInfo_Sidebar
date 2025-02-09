@@ -28,17 +28,17 @@ class PNGInfo_SideBar {
         this.log('PNGInfo constructor start');
 
         //settings
-        this.fontName = app.ui.settings.getSettingValue("PNGInfo.General.FontName", DEF_FONT_NAME);
-        this.fontSize = app.ui.settings.getSettingValue("PNGInfo.General.FontSize", DEF_FONT_SIZE);
-        this.imageSize = app.ui.settings.getSettingValue("PNGInfo.General.ImageSize", DEF_IMAGE_SIZE);
-        this.color_default = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors.Text", DEF_COLOR_TEXT));
-        this.color_file = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors.File", DEF_COLOR_FILE));
-        this.color_int = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors.Number", DEF_COLOR_NUMBER));
-        this.color_header = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors.Header", DEF_COLOR_HEADER));
-        this.color_dark_default = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors (Dark Theme).Text", DEF_COLOR_DARK_TEXT));
-        this.color_dark_file = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors (Dark Theme).File", DEF_COLOR_DARK_FILE));
-        this.color_dark_int = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors (Dark Theme).Number", DEF_COLOR_DARK_NUMBER));
-        this.color_dark_header = this.default_color_check(app.ui.settings.getSettingValue("PNGInfo.Colors (Dark Theme).Header", DEF_COLOR_DARK_HEADER));
+        this.fontName = this.getSettingValue("PNGInfo.General.FontName", DEF_FONT_NAME);
+        this.fontSize = this.getSettingValue("PNGInfo.General.FontSize", DEF_FONT_SIZE);
+        this.imageSize = this.getSettingValue("PNGInfo.General.ImageSize", DEF_IMAGE_SIZE);
+        this.color_default = this.default_color_check(this.getSettingValue("PNGInfo.Colors.Text", DEF_COLOR_TEXT));
+        this.color_file = this.default_color_check(this.getSettingValue("PNGInfo.Colors.File", DEF_COLOR_FILE));
+        this.color_int = this.default_color_check(this.getSettingValue("PNGInfo.Colors.Number", DEF_COLOR_NUMBER));
+        this.color_header = this.default_color_check(this.getSettingValue("PNGInfo.Colors.Header", DEF_COLOR_HEADER));
+        this.color_dark_default = this.default_color_check(this.getSettingValue("PNGInfo.Colors (Dark Theme).Text", DEF_COLOR_DARK_TEXT));
+        this.color_dark_file = this.default_color_check(this.getSettingValue("PNGInfo.Colors (Dark Theme).File", DEF_COLOR_DARK_FILE));
+        this.color_dark_int = this.default_color_check(this.getSettingValue("PNGInfo.Colors (Dark Theme).Number", DEF_COLOR_DARK_NUMBER));
+        this.color_dark_header = this.default_color_check(this.getSettingValue("PNGInfo.Colors (Dark Theme).Header", DEF_COLOR_DARK_HEADER));
 
         this.colors = {
             color_default: `<span class="my-color-default">`,
@@ -73,7 +73,18 @@ class PNGInfo_SideBar {
 
 ///////////////////////////////////////////
 
-    update () {
+    getSettingValue(value,def) {
+        let result = app.extensionManager.setting.get(value);
+        if (result) { 
+            return result;
+        } else {
+            return def;
+        }
+    }
+
+///////////////////////////////////////////
+
+    update() {
         this.log('PNGInfo update');
     }
 
@@ -406,7 +417,6 @@ app.registerExtension({
             name: "Color Header",
             type: "color",
             defaultValue: DEF_COLOR_HEADER, 
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_header(newVal); } },
         });
 
@@ -415,7 +425,6 @@ app.registerExtension({
             name: "Color Number",
             type: "color",
             defaultValue: DEF_COLOR_NUMBER, 
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_int(newVal); } },
         });
 
@@ -424,7 +433,6 @@ app.registerExtension({
             name: "Color File",
             type: "color",
             defaultValue: DEF_COLOR_FILE,
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_file(newVal); } },
         });
 
@@ -433,7 +441,6 @@ app.registerExtension({
             name: "Color Text",
             type: "color",
             defaultValue: DEF_COLOR_TEXT,
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_default(newVal); } },
         });
 
@@ -444,7 +451,6 @@ app.registerExtension({
             name: "Color Header",
             type: "color",
             defaultValue: DEF_COLOR_DARK_HEADER, 
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_dark_header(newVal); } },
         });
 
@@ -453,7 +459,6 @@ app.registerExtension({
             name: "Color Number",
             type: "color",
             defaultValue: DEF_COLOR_DARK_NUMBER, 
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_dark_int(newVal); } },
         });
 
@@ -462,7 +467,6 @@ app.registerExtension({
             name: "Color File",
             type: "color",
             defaultValue: DEF_COLOR_DARK_FILE, 
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_dark_file(newVal); } },
         });
 
@@ -471,7 +475,6 @@ app.registerExtension({
             name: "Color Text",
             type: "color",
             defaultValue: DEF_COLOR_DARK_TEXT, 
-            versionAdded: '1.5.6',
             onChange: (newVal, oldVal) => { if (app.PNGInfo) { app.PNGInfo.update_color_dark_default(newVal); } },
         });
 

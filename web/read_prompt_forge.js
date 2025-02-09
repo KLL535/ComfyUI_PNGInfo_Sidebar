@@ -122,19 +122,72 @@ export default class ForgeUI extends BaseFormat {
 
     parseParameters(text) {
         const result = [];
-        const parts = text.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        
+        const parts = this.splitWithJsonAndQuotes(text);
+
         for (const part of parts) {
-          if (!part.trim()) continue;
-          const colonIndex = part.indexOf(':');
-          if (colonIndex === -1) continue;
-          const key = part.slice(0,colonIndex).trim();
-          let value = part.slice(colonIndex+1).trim();
-          if (value.startsWith('"') && value.endsWith('"')) {
-            value = value.slice(1,-1);
-          }
-          result.push({key, value})
-        } 
+            if (!part.trim()) continue;
+            const colonIndex = part.indexOf(':');
+            if (colonIndex === -1) continue;
+
+            const key = part.slice(0, colonIndex).trim();
+            let value = part.slice(colonIndex + 1).trim();
+
+            if (value.startsWith('"') && value.endsWith('"')) {
+                value = value.slice(1, -1); 
+            }
+
+            if (value.endsWith(',')) {
+                value = value.slice(0, -1).trim();
+            }
+
+            result.push({ key, value });
+        }
+
         return result;
+    }
+
+    splitWithJsonAndQuotes(text) {
+        const parts = [];
+        let currentPart = '';
+        let inJsonBlock = false;
+        let inQuoteBlock = false;
+        let jsonDepth = 0;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+
+            if (char === '[' || char === '{') {
+                if (!inJsonBlock && !inQuoteBlock) {
+                    inJsonBlock = true;
+                }
+                jsonDepth++;
+            }
+
+            if (char === ']' || char === '}') {
+                jsonDepth--;
+                if (jsonDepth === 0) {
+                    inJsonBlock = false;
+                }
+            }
+
+            if (char === '"') {
+                inQuoteBlock = !inQuoteBlock; 
+            }
+
+            currentPart += char;
+
+            if (!inJsonBlock && !inQuoteBlock && char === ',' && jsonDepth === 0) {
+                parts.push(currentPart.trim());
+                currentPart = '';
+            }
+        }
+
+        if (currentPart.trim()) {
+            parts.push(currentPart.trim());
+        }
+
+        return parts;
     }
 
 }
