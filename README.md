@@ -8,7 +8,7 @@ If you have a lot of images generated in **Forge**, you switched to **СomfyUI**
 The extension adds a tab on the left, which, when opened, will open a convenient window for viewing PNG image metadata.
 Just click on the button/image and open the image. Or drag the image to this part of the window to open it.
 
-![image](https://github.com/user-attachments/assets/a5f4f352-63ba-43c0-9a26-74e3b285b481)
+![image](https://github.com/user-attachments/assets/429eaff3-6e45-4636-ae99-75d8ac34b374)
 
 ### Advantages:
 Allows you to conveniently view information without stopping the workflow.
