@@ -51,6 +51,20 @@ export default class ComfyUI extends BaseFormat {
         this.log(resultDict);  
 
         let result = {};
+
+        function processKeyValue(obj, key, value) {
+            if (obj.hasOwnProperty(key)) {
+                if (!Array.isArray(obj[key])) {
+                    obj[key] = [obj[key]];
+                }
+                if (!obj[key].includes(value)) {
+                    obj[key].push(value); 
+                }
+            } else {
+                obj[key] = value;
+            }
+        }
+        
         for (const key in resultDict) {
             if (Array.isArray(resultDict[key])) {
                 for (const { value, id } of resultDict[key]) {
@@ -58,16 +72,33 @@ export default class ComfyUI extends BaseFormat {
                     this.log(key);  
                     this.log(value);  
 
-                    const _key = `${this.escapeHTML(key)}`;        
-                    const _value = `${this.escapeHTML(value.toString())}`;        
+                    const _key = `${this.escapeHTML(key)}`;   
+                    
+                    if (value === null) continue;
+                    if (Array.isArray(value)) continue;
 
-                    if (this.isNumber(_value)) {
-                        result[`${_key}: `] = `${this.options.colors.color_int}${_value}`;
-                    } else if (this.files_type.some(ext => _value.includes(ext))) {
-                        result[`${_key}: `] = `${this.options.colors.color_file}${_value}`;
-                    }  
-                    else{
-                        result[`${_key}: `] = `${_value}`;
+                    if (typeof value !== 'object') {
+                        //non object
+                         const _value = `${this.escapeHTML(value.toString())}`;        
+
+                        if (this.isNumber(_value)) {
+                            processKeyValue(result, `${_key}: `, `${this.options.colors.color_int}${_value}`);
+                        } else if (this.files_type.some(ext => _value.includes(ext))) {
+                            processKeyValue(result, `${_key}: `, `${this.options.colors.color_file}${_value}`);
+                        }  
+                        else{
+                            processKeyValue(result, `${_key}: `, `${_value}`);
+                        }
+                    }
+                    else
+                    {
+                        //object
+                        const entries = Object.entries(value);
+                        const parts = entries.map(([key, value]) => {
+                            return `${key}: ${value}`;
+                        });
+                        const text = this.escapeHTML(parts.join(', '));
+                        processKeyValue(result, `${_key}: `, `${text}`);
                     }
                 }
             }

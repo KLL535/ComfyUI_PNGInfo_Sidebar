@@ -92,7 +92,7 @@ export default class ForgeUI extends BaseFormat {
         for (let i = 0; i < params.length; i++) {
           const obj = params[i];
           const key = `${this.escapeHTML(obj.key)}`;        
-          const text = `${this.escapeHTML(obj.value)}`;        
+          const text = `${this.escapeHTML(obj.value)}`;  
 
           if (this.isNumber(obj.value)) {
               result[`${key}: `] = `${this.options.colors.color_int}${text}`
@@ -148,7 +148,7 @@ export default class ForgeUI extends BaseFormat {
     }
 
     splitWithJsonAndQuotes(text) {
-        const parts = [];
+        let parts = [];
         let currentPart = '';
         let inJsonBlock = false;
         let inQuoteBlock = false;
@@ -157,37 +157,97 @@ export default class ForgeUI extends BaseFormat {
         for (let i = 0; i < text.length; i++) {
             const char = text[i];
 
-            if (char === '[' || char === '{') {
-                if (!inJsonBlock && !inQuoteBlock) {
-                    inJsonBlock = true;
-                }
-                jsonDepth++;
-            }
-
-            if (char === ']' || char === '}') {
-                jsonDepth--;
-                if (jsonDepth === 0) {
-                    inJsonBlock = false;
-                }
-            }
-
             if (char === '"') {
-                inQuoteBlock = !inQuoteBlock; 
+                inQuoteBlock = !inQuoteBlock;
             }
 
-            currentPart += char;
+            if (!inQuoteBlock) {
+                if (char === '[' || char === '{') {
+                    jsonDepth++;
+                    inJsonBlock = true;
+                } else if (char === ']' || char === '}') {
+                    if (jsonDepth > 0) {
+                        jsonDepth--;
+                    }
+                    if (jsonDepth === 0) {
+                        inJsonBlock = false;
+                    }
+                }
+            }
 
-            if (!inJsonBlock && !inQuoteBlock && char === ',' && jsonDepth === 0) {
-                parts.push(currentPart.trim());
+            const isDelimiter = char === ',' && !inJsonBlock && !inQuoteBlock;
+            if (isDelimiter) {
+                const input = currentPart.trim();
+                if (input) {
+                    const parts2 = this.parseCivitAIblock(input);
+                    if (parts2.length > 0) { 
+                        parts = parts.concat(parts2); 
+                    } else {
+                        parts.push(input);
+                    }
+                }
                 currentPart = '';
+            } else {
+                currentPart += char;
             }
         }
 
-        if (currentPart.trim()) {
-            parts.push(currentPart.trim());
+        const input = currentPart.trim();
+        if (input) {
+            const parts2 = this.parseCivitAIblock(input);
+            if (parts2.length > 0) { 
+                parts = parts.concat(parts2); 
+            } else {
+                parts.push(input);
+            }
         }
 
         return parts;
+    }
+
+    parseCivitAIblock(text) {
+        const substring = "Civitai resources:";
+
+        if (!text.includes(substring)) {
+            return [];
+        }
+
+        const startIndex = text.indexOf(substring) + substring.length;
+        let input = text.slice(startIndex).trim();
+
+        if (!input.startsWith('[') || !input.endsWith(']')) {
+            return [];
+        }
+
+        try {
+
+            this.log("Civitai resources");
+
+            const jsonArray = JSON.parse(input);
+
+            if (!Array.isArray(jsonArray)) {
+                this.log("Not Array");
+                return [];
+            }
+
+            const parts = [];
+            jsonArray.forEach(item => {
+                const type = item.type;
+                const modelVersionId = item.modelVersionId;
+                const weight = item.weight;
+
+                let output = `${type}:id=${modelVersionId}`;
+                if (weight !== undefined) {
+                    output += `, weight=${weight}`;
+                }
+                parts.push(output);
+            });
+            return parts;
+
+        } catch (error) {
+            this.log("Eroor in parseCivitAIblock: ", error.message);
+            return [];
+        }
     }
 
 }

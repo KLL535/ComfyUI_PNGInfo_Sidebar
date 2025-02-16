@@ -74,7 +74,7 @@ class PNGInfo_SideBar {
 ///////////////////////////////////////////
 
     getSettingValue(value,def) {
-        let result = app.extensionManager.setting.get(value);
+        const result = app.extensionManager.setting.get(value);
         if (result) { 
             return result;
         } else {

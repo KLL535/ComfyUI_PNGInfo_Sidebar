@@ -265,11 +265,17 @@ export class ImageUploader {
         const container = document.createElement('div');
         container.className = 'image-metadata';
 
-        const metadataHTML = Object.entries(metadata)
-            .map(([header, value]) => 
-                header == "Error" ? `${this.options.colors.color_red}${value}` :
-                   `${this.options.colors.color_header}${header}${this.options.colors.color_default}${value}`
-            ).join('<br>');
+        const metadataHTML = Object.entries(metadata).flatMap(([header, value]) => {
+            if (Array.isArray(value)) {
+                return value.map(item => 
+                    `${this.options.colors.color_header}${header}${this.options.colors.color_default}${item}`
+                );
+            } else {
+                return header == "Error" 
+                    ? `${this.options.colors.color_red}${value}` 
+                    : `${this.options.colors.color_header}${header}${this.options.colors.color_default}${value}`;
+            }
+        }).join('<br>');
 
         container.innerHTML = metadataHTML;
         return container;
@@ -378,7 +384,7 @@ export class ImageUploader {
             switch (type) {
                 case 7: // undefined, 8-bit byte, value depending on field
                     if (numValues > 6) {
-                        return decodeUTF16(file, valueOffset, numValues-1);
+                        return decodeUTF16(file, valueOffset, numValues);
                     }
                     break;
 
@@ -429,9 +435,17 @@ export class ImageUploader {
             }
 
             const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset + textStart, textLength);
-            const decodedText = utf16Decoder.decode(uint8Array);
 
-            return decodedText;
+            if (textLength % 2 !== 0) {
+                const utf16Part = uint8Array.slice(0, textLength - 1); 
+                const asciiByte = uint8Array[textLength - 1]; 
+                let decodedText = utf16Decoder.decode(utf16Part);
+                decodedText += String.fromCharCode(asciiByte);
+                return decodedText;
+            } else {
+                const decodedText = utf16Decoder.decode(uint8Array);        
+                return decodedText;
+            }
         }
 
         if (decodeAscii(file, start, 4) != "Exif") {
