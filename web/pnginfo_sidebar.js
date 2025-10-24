@@ -105,6 +105,7 @@ class PNGInfo_SideBar {
                 position: relative;
                 /*display: flex;*/
                 /*align-items: center;*/
+                padding-top: 10px;
                 flex-direction: column;
             }
                     

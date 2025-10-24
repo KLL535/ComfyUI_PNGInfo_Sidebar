@@ -278,6 +278,19 @@ export class ImageUploader {
         }).join('<br>');
 
         container.innerHTML = metadataHTML;
+
+        container.setAttribute('tabindex', '0');
+        container.addEventListener('copy', (e) => {
+            const selectedText = window.getSelection().toString();
+            if (selectedText) {
+                    e.preventDefault(); 
+                    navigator.clipboard.writeText(selectedText).then(() => {
+                }).catch(err => {
+                    console.error('Не удалось скопировать текст:', err);
+                });
+            }
+        });
+
         return container;
     }
 
