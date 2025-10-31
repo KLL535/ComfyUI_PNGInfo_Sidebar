@@ -1,4 +1,5 @@
 # nightly
+- fix copy problem in new version Comfy-UI
 # v1.0.1
 - fix disappearance of duplicate fields
 - fix getSettingValue
@@ -7,3 +8,4 @@
 - now supports jpg
 # v1.0.0
 - first commit
+
