@@ -1,7 +1,7 @@
 [project]
 name = "pnginfo_sidebar"
 description = "Frontend extension that adds a sidebar for easy viewing of PNG file metadata."
-version = "1.0.1"
+version = "1.0.2"
 license = {file = "LICENSE"}
 
 [project.urls]
