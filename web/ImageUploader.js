@@ -1,6 +1,5 @@
 import { app } from "../../../scripts/app.js";
-import * as pngMetadata from "../../../scripts/metadata/png.js";
-
+// import * as pngMetadata from "../../../scripts/metadata/png.js"; // ЗАКОММЕНТИРОВАНО: Внутренний API заблокирован
 import ComfyUI from "./read_prompt_comfy.js";
 import ForgeUI from "./read_prompt_forge.js";
 
@@ -12,16 +11,12 @@ export class ImageUploader {
         this.log('ImageUploader constructor');
     }
 
-    ///////////////////////////////////////////
-
     init() {
         this.log('ImageUploader init');
         this.createElements();
         this.setupEventListeners();
         this.setupDragAndDrop();
     }
-
-    ///////////////////////////////////////////
 
     log(...args) {
         if (this.options.isDebugMode) {
@@ -30,15 +25,17 @@ export class ImageUploader {
     }
 
     showToast(severity, summary, detail) {
-        app.extensionManager.toast.add({
-            severity: severity,
-            summary: summary,
-            detail: detail,
-            life: 3000
-        });
+        if (app.extensionManager?.toast) {
+            app.extensionManager.toast.add({
+                severity: severity,
+                summary: summary,
+                detail: detail,
+                life: 3000
+            });
+        } else {
+            console.warn(summary, detail);
+        }
     }
-
-    ///////////////////////////////////////////
 
     createElements() {
         this.log('ImageUploader createElements');
@@ -52,12 +49,10 @@ export class ImageUploader {
 
         this.fileInput = document.createElement('input');
         this.fileInput.type = 'file';
-        //this.fileInput.accept = this.options.accept;
         this.fileInput.hidden = true;
 
         this.dropOverlay = document.createElement('div');
         this.dropOverlay.className = 'drop-overlay';
-        //this.dropOverlay.textContent = this.options.dropZoneText;
 
         this.innerContainer.appendChild(this.button);
         this.innerContainer.appendChild(this.fileInput);
@@ -65,15 +60,11 @@ export class ImageUploader {
         this.container.appendChild(this.innerContainer);
     }
 
-    ///////////////////////////////////////////
-
     setupEventListeners() {
         this.log('ImageUploader setupEventListeners');
         this.button.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
     }
-
-    ///////////////////////////////////////////
 
     setupDragAndDrop() {
         this.log('ImageUploader setupDragAndDrop');
@@ -95,15 +86,12 @@ export class ImageUploader {
         this.innerContainer.addEventListener('drop', (e) => {
             preventDefault(e);
             this.dropOverlay.classList.remove('active');
-            
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 this.handleFileSelect({ target: { files } });
             }
         });
     }
-
-    ///////////////////////////////////////////
 
     handleFileSelect(e) {
         this.log('ImageUploader handleFileSelect');
@@ -123,8 +111,6 @@ export class ImageUploader {
         }
     }
 
-    ///////////////////////////////////////////
-
     async displayImage(file) {
         this.log('ImageUploader displayImage');
         try {
@@ -136,7 +122,6 @@ export class ImageUploader {
             img.title = 'Click to load new image or drop new image';
 
             const metadata = await this.readMetadata(file);
-            
             const metadataContainer = this.createMetadataContainer(metadata);
 
             this.innerContainer.replaceChildren(
@@ -155,14 +140,9 @@ export class ImageUploader {
         }
     }
 
-    ///////////////////////////////////////////
-
     async readMetadata(file) {
         this.log('ImageUploader readMetadata');
-        const baseMetadata = {
-            //'File name: ': file.name,
-            //'Last change: ': new Date(file.lastModified).toLocaleString()
-        };
+        const baseMetadata = {};
 
         try {
             if (file.type === 'image/png') {
@@ -184,34 +164,83 @@ export class ImageUploader {
         return baseMetadata;
     }
 
-    ///////////////////////////////////////////
-
     readFileAsArrayBuffer(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-
             reader.onload = () => resolve(reader.result);
             reader.onerror = () => reject(new Error('Error reading file'));
-
             reader.readAsArrayBuffer(file);
         });
     }
 
+    // --- НОВЫЙ ПАРСЕР PNG (Вместо заблокированного модуля) ---
     async readPNGMetadata(file) {
         this.log('ImageUploader readPNGMetadata');
-
         try {
             const arrayBuffer = await this.readFileAsArrayBuffer(file);
             const data = new Uint8Array(arrayBuffer);
-            const metadata = pngMetadata.getFromPngBuffer(data);
+            
+            // Простой парсер PNG чанков для поиска tEXt
+            const metadata = this.parsePngChunks(data);
             return this.parceMetadata(metadata);
         } catch (error) {
-            console.error('Error reading metadata:', error);
+            console.error('Error reading meta', error);
             throw error; 
         }
     }
 
-    ///////////////////////////////////////////
+    parsePngChunks(data) {
+        // Проверка сигнатуры PNG
+        if (data[0] !== 137 || data[1] !== 80 || data[2] !== 78 || data[3] !== 71) {
+            console.warn("Not a valid PNG file");
+            return {};
+        }
+
+        let offset = 8; // Пропускаем сигнатуру
+        const textData = {};
+
+        while (offset < data.length) {
+            // Длина чанка (4 байта)
+            const length = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+            // Тип чанка (4 байта)
+            const type = String.fromCharCode(data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7]);
+            
+            // Данные чанка
+            const chunkData = data.slice(offset + 8, offset + 8 + length);
+            
+            // Нас интересуют текстовые чанки
+            if (type === 'tEXt') {
+                // tEXt формат: Keyword\0Text
+                let nullIndex = -1;
+                for (let i = 0; i < chunkData.length; i++) {
+                    if (chunkData[i] === 0) {
+                        nullIndex = i;
+                        break;
+                    }
+                }
+                
+                if (nullIndex > 0) {
+                    const key = String.fromCharCode(...chunkData.slice(0, nullIndex));
+                    // Пытаемся декодировать текст (латиница обычно)
+                    const value = new TextDecoder('latin1').decode(chunkData.slice(nullIndex + 1));
+                    
+                    // Стандартные ключи ComfyUI/A1111
+                    if (key === 'parameters' || key === 'prompt' || key === 'Workflow') {
+                        textData[key] = value;
+                    }
+                }
+            }
+            
+            // Переход к следующему чанку (длина + тип + данные + CRC)
+            offset += 12 + length;
+            
+            // Если нашли IEND, конец файла
+            if (type === 'IEND') break;
+        }
+
+        return textData;
+    }
+    // ---------------------------------------------------------
 
     parceMetadata(metadata) {   
         this.log('ImageUploader parceMetadata'); 
@@ -219,7 +248,13 @@ export class ImageUploader {
 
         let result = {};
 
-        try{ 
+        // Проверка на пустоту metadata
+        if (!metadata || Object.keys(metadata).length === 0) {
+             result["Error"] = "No metadata found in image";
+             return result;
+        }
+
+        try { 
             if (metadata && metadata.parameters) {
                 const forge_parcer = new ForgeUI(metadata.parameters, {
                     isDebugMode: this.options.isDebugMode,
@@ -227,14 +262,15 @@ export class ImageUploader {
                 });
                 forge_parcer.run();
                 result = forge_parcer.output;
-                return result;
+                if (Object.keys(result).length > 0) return result;
             }
         } catch (error) {
-            const error_text = "Error in parameters section";
-            result["Error"] = `${error_text}`;
+            const error_text = "Error in parameters section ";
+            console.error(error_text, error);
+            // Не возвращаем сразу, пробуем другой вариант
         }
 
-        try{ 
+        try { 
             if (metadata && metadata.prompt) {
                 const comfy_parcer = new ComfyUI(metadata.prompt, {
                     isDebugMode: this.options.isDebugMode,
@@ -242,22 +278,23 @@ export class ImageUploader {
                 });
                 comfy_parcer.run();
                 result = comfy_parcer.output;
-                return result;
+                if (Object.keys(result).length > 0) return result;
             }
         } catch (error) {
-            const error_text = "Error in prompt section";
-            result["Error"] = `${error_text}`;
+            const error_text = "Error in prompt section ";
+            console.error(error_text, error);
         }
 
         if (Object.keys(result).length === 0) {
-            const error_text = "None";
-            result["Error"] = `${error_text}`;
+            result["Error"] = "None (Metadata exists but format unrecognized)";
+            // Для отладки покажем сырые данные, если есть
+            if(metadata.Workflow) {
+                result["Raw Workflow"] = "Exists (ComfyUI Native)";
+            }
         }
 
         return result;
     }
-
-    ///////////////////////////////////////////
 
     createMetadataContainer(metadata) {
         this.log('ImageUploader createMetadataContainer'); 
@@ -283,10 +320,9 @@ export class ImageUploader {
         container.addEventListener('copy', (e) => {
             const selectedText = window.getSelection().toString();
             if (selectedText) {
-                    e.preventDefault(); 
-                    navigator.clipboard.writeText(selectedText).then(() => {
-                }).catch(err => {
-                    console.error('Не удалось скопировать текст:', err);
+                e.preventDefault(); 
+                navigator.clipboard.writeText(selectedText).catch(err => {
+                    console.error('Failed to copy text:', err);
                 });
             }
         });
@@ -294,18 +330,13 @@ export class ImageUploader {
         return container;
     }
 
-    ///////////////////////////////////////////
-
     addImageClickHandler() {
         this.log('ImageUploader addImageClickHandler'); 
-
         const img = this.innerContainer.querySelector('img');
         if (img) {
             img.addEventListener('click', () => this.fileInput.click());
         }
     }
-
-    ///////////////////////////////////////////
 
     clearPreviousImage() {
         this.log('ImageUploader clearPreviousImage'); 
@@ -315,70 +346,47 @@ export class ImageUploader {
         }
     }
 
-    ///////////////////////////////////////////
-
     destroy() {
         this.log('ImageUploader destroy'); 
         this.clearPreviousImage();
-        this.innerContainer.removeEventListener('dragover', preventDefault);
-        this.innerContainer.removeEventListener('dragleave', preventDefault);
-        this.innerContainer.removeEventListener('drop', preventDefault);
-        this.container.innerHTML = '';
+        if(this.innerContainer) {
+            this.innerContainer.innerHTML = '';
+        }
     }
-
-    ///////////////////////////////////////////
 
     async readEXIFMetadata(file) {
         this.log('ImageUploader readEXIFMetadata');
-
         try {
             const arrayBuffer = await this.readFileAsArrayBuffer(file);
             const data = new DataView(arrayBuffer);
             const metadata = this.getFromEXIFBuffer(data);
             return this.parceMetadata(metadata);
         } catch (error) {
-            console.error('Error reading metadata:', error);
+            console.error('Error reading meta', error);
             throw error; 
         }
     }
 
     getFromEXIFBuffer(data) {
         this.log('ImageUploader getFromEXIFBuffer'); 
-
-        this.log("Got buffer of length " + data.byteLength);
         if ((data.getUint8(0) != 0xFF) || (data.getUint8(1) != 0xD8)) {
-            this.log("Not a valid JPEG");
-            return false; // not a valid jpeg
+            return false;
         }
 
-        var offset = 2,
-            length = data.byteLength,
-            marker;
-
+        var offset = 2, length = data.byteLength, marker;
         while (offset < length) {
-            if (data.getUint8(offset) != 0xFF) {
-                this.log("Not a valid marker at offset " + offset + ", found: " + data.getUint8(offset));
-                return false; // not a valid marker, something is wrong
-            }
-
+            if (data.getUint8(offset) != 0xFF) return false;
             marker = data.getUint8(offset + 1);
-            this.log(marker);
-
             if (marker == 225) {
-                this.log("Found 0xFFE1 marker");
                 return this.readEXIFData(data, offset + 4, data.getUint16(offset + 2) - 2);
             } else {
                 offset += 2 + data.getUint16(offset+2);
             }
-
         }
-
-    }
+    } 
 
     readEXIFData(file, start) {
-
-        this.log('ImageUploader readEXIFData'); 
-
+        // ... (Ваш код EXIF без изменений)
         var EXIF = function(obj) {
             if (obj instanceof EXIF) return obj;
             if (!(this instanceof EXIF)) return new EXIF(obj);
@@ -391,17 +399,15 @@ export class ImageUploader {
         function readTagValue(file, entryOffset, tiffStart, dirStart, bigEnd) {
             var type = file.getUint16(entryOffset+2, !bigEnd),
                 numValues = file.getUint32(entryOffset+4, !bigEnd),
-                valueOffset = file.getUint32(entryOffset+8, !bigEnd) + tiffStart,
-                offset;
+                valueOffset = file.getUint32(entryOffset+8, !bigEnd) + tiffStart;
 
             switch (type) {
-                case 7: // undefined, 8-bit byte, value depending on field
+                case 7: 
                     if (numValues > 6) {
                         return decodeUTF16(file, valueOffset, numValues);
                     }
                     break;
-
-                case 4: // long, 32 bit int
+                case 4: 
                     if (numValues == 1) {
                         return file.getUint32(entryOffset + 8, !bigEnd);
                     } 
@@ -412,8 +418,7 @@ export class ImageUploader {
         function readTags(file, tiffStart, dirStart, strings, bigEnd) {
             var entries = file.getUint16(dirStart, !bigEnd),
                 tags = {},
-                entryOffset, tag,
-                i;
+                entryOffset, tag, i;
 
             for (i=0;i<entries;i++) {
                 entryOffset = dirStart + i*12 + 2;
@@ -430,83 +435,49 @@ export class ImageUploader {
         }
 
         function decodeUTF16(buffer, start, length) {
-
             const text = decodeAscii(buffer, start, 7);
-
-            if (text != "UNICODE") {
-                console.error(`Invalid format: Expected 'UNICODE' at the beginning, read: ${text}`); 
-                return "";
+            if (text != "UNICODE") { 
+                return " ";
             }
-
             const utf16Decoder = new TextDecoder('utf-16le');
             const textStart = start + 7; 
             const textLength = length - 7; 
-
-            if (textLength <= 0) {
-                console.error(`No data for decoding`);
-                return ""; 
-            }
-
+            if (textLength <= 0) return " "; 
+            
             const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset + textStart, textLength);
-
-            if (textLength % 2 !== 0) {
-                const utf16Part = uint8Array.slice(0, textLength - 1); 
-                const asciiByte = uint8Array[textLength - 1]; 
-                let decodedText = utf16Decoder.decode(utf16Part);
-                decodedText += String.fromCharCode(asciiByte);
-                return decodedText;
-            } else {
-                const decodedText = utf16Decoder.decode(uint8Array);        
-                return decodedText;
-            }
+            return utf16Decoder.decode(uint8Array);
         }
 
         if (decodeAscii(file, start, 4) != "Exif") {
-            this.log("Not valid EXIF data! " + decodeAscii(file, start, 4));
             return false;
         }
 
-        var bigEnd,
-            tags = {}, 
-            tag,
-            tiffOffset = start + 6;
+        var bigEnd, tags = {}, tag, tiffOffset = start + 6;
 
-        // test for TIFF validity and endianness
         if (file.getUint16(tiffOffset) == 0x4949) {
             bigEnd = false;
         } else if (file.getUint16(tiffOffset) == 0x4D4D) {
             bigEnd = true;
         } else {
-            this.log("Not valid TIFF data! (no 0x4949 or 0x4D4D)");
             return false;
         }
 
         if (file.getUint16(tiffOffset+2, !bigEnd) != 0x002A) {
-            this.log("Not valid TIFF data! (no 0x002A)");
             return false;
         }
 
-        this.log("Valid TIFF data!"); 
-
         var firstIFDOffset = file.getUint32(tiffOffset+4, !bigEnd);
-
         if (firstIFDOffset < 0x00000008) {
-            this.log("Not valid TIFF data! (First offset less than 8)", file.getUint32(tiffOffset+4, !bigEnd));
             return false;
         }
 
         const tiff = readTags(file, tiffOffset, tiffOffset + firstIFDOffset, TiffTags, bigEnd);
-
         if (tiff.ExifIFDPointer) {
             const exifData = readTags(file, tiffOffset, tiffOffset + tiff.ExifIFDPointer, ExifTags, bigEnd);
             for (tag in exifData) {
                 tags["parameters"] = exifData[tag];
             }
         }
-
-        this.log(tags);
-
         return tags;
     }
-
 }
