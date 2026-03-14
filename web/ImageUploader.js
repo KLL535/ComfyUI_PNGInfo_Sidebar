@@ -101,13 +101,14 @@ export class ImageUploader {
         const allowedExtensions = ['image/png', 'image/jpeg'];
         const isImage = allowedExtensions.includes(file.type);
 
+        this.fileInput.value = '';
+
         if (isImage) {
             this.clearPreviousImage();
             this.displayImage(file);
             this.addImageClickHandler();
         } else {
             this.showToast('error', 'PNGInfo Failed', `Unsupported file format`);
-            this.fileInput.value = '';
         }
     }
 
@@ -200,7 +201,7 @@ export class ImageUploader {
         const textData = {};
 
         while (offset < data.length) {
-            // Длина чанка (4 байта)
+            // Длина чанка (4 байта, big-endian)
             const length = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
             // Тип чанка (4 байта)
             const type = String.fromCharCode(data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7]);
@@ -208,9 +209,9 @@ export class ImageUploader {
             // Данные чанка
             const chunkData = data.slice(offset + 8, offset + 8 + length);
             
-            // Нас интересуют текстовые чанки
-            if (type === 'tEXt') {
-                // tEXt формат: Keyword\0Text
+            // Обрабатываем текстовые чанки: tEXt, zTXt, iTXt
+            if (type === 'tEXt' || type === 'zTXt' || type === 'iTXt') {
+                // Находим разделитель нулевым байтом
                 let nullIndex = -1;
                 for (let i = 0; i < chunkData.length; i++) {
                     if (chunkData[i] === 0) {
@@ -220,24 +221,43 @@ export class ImageUploader {
                 }
                 
                 if (nullIndex > 0) {
-                    const key = String.fromCharCode(...chunkData.slice(0, nullIndex));
-                    // Пытаемся декодировать текст (латиница обычно)
-                    const value = new TextDecoder('latin1').decode(chunkData.slice(nullIndex + 1));
+                    const rawKey = String.fromCharCode(...chunkData.slice(0, nullIndex));
+                    const key = rawKey.trim().toLowerCase();
                     
-                    // Стандартные ключи ComfyUI/A1111
-                    if (key === 'parameters' || key === 'prompt' || key === 'Workflow') {
-                        textData[key] = value;
+                    let value = '';
+                    if (type === 'tEXt') {
+                        const decoder = typeof TextDecoder !== 'undefined' 
+                            ? new TextDecoder('utf-8') 
+                            : { decode: (arr) => new TextDecoder('utf-8').decode(arr) };
+                        value = decoder.decode(chunkData.slice(nullIndex + 1));
+                    } else {
+                        // Для zTXt/iTXt — пока без распаковки
+                        const decoder = typeof TextDecoder !== 'undefined' 
+                            ? new TextDecoder('utf-8') 
+                            : { decode: (arr) => Array.from(arr).map(b => String.fromCharCode(b)).join('') };
+                        value = decoder.decode(chunkData.slice(nullIndex + 1));
+                        this.log(`Warning: ${type} chunk not fully decompressed: ${key}`);
+                    }
+                    
+                    // Отладка: логируем ВСЕ найденные ключи
+                    this.log(`Found PNG chunk key: "${rawKey}" -> normalized: "${key}"`);
+                    
+                    if (key === 'parameters' || key === 'prompt' || key === 'workflow') {
+                        // Сохраняем под оригинальным именем ключа (как ожидает parceMetadata)
+                        const storeKey = key === 'parameters' ? 'parameters' : key;
+                        textData[storeKey] = value;
+                        this.log(`Stored ${storeKey}: ${value.substring(0, 100)}...`);
                     }
                 }
             }
             
-            // Переход к следующему чанку (длина + тип + данные + CRC)
             offset += 12 + length;
             
             // Если нашли IEND, конец файла
             if (type === 'IEND') break;
         }
 
+        this.log(`parsePngChunks result keys: ${Object.keys(textData).join(', ')}`);
         return textData;
     }
     // ---------------------------------------------------------
@@ -288,7 +308,7 @@ export class ImageUploader {
         if (Object.keys(result).length === 0) {
             result["Error"] = "None (Metadata exists but format unrecognized)";
             // Для отладки покажем сырые данные, если есть
-            if(metadata.Workflow) {
+            if(metadata.workflow) {
                 result["Raw Workflow"] = "Exists (ComfyUI Native)";
             }
         }
@@ -302,15 +322,16 @@ export class ImageUploader {
         const container = document.createElement('div');
         container.className = 'image-metadata';
 
-        const metadataHTML = Object.entries(metadata).flatMap(([header, value]) => {
-            if (Array.isArray(value)) {
-                return value.map(item => 
+        const metadataHTML = Object.entries(metadata || {}).flatMap(([header, value]) => {
+            const safeValue = value ?? '';
+            if (Array.isArray(safeValue)) {
+                return safeValue.map(item => 
                     `${this.options.colors.color_header}${header}${this.options.colors.color_default}${item}`
                 );
             } else {
                 return header == "Error" 
-                    ? `${this.options.colors.color_red}${value}` 
-                    : `${this.options.colors.color_header}${header}${this.options.colors.color_default}${value}`;
+                    ? `${this.options.colors.color_red}${safeValue}` 
+                    : `${this.options.colors.color_header}${header}${this.options.colors.color_default}${safeValue}`;
             }
         }).join('<br>');
 
@@ -445,7 +466,7 @@ export class ImageUploader {
             if (textLength <= 0) return " "; 
             
             const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset + textStart, textLength);
-            return utf16Decoder.decode(uint8Array);
+            return utf16Decoder.decode(uint8Array).replace(/[\x00\uFFFD]+$/g, '').trim();
         }
 
         if (decodeAscii(file, start, 4) != "Exif") {

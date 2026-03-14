@@ -2,14 +2,16 @@ import BaseFormat from "./read_prompt_base.js";
 
 export default class ForgeUI extends BaseFormat {
     constructor(raw = "", options = {}) {
-        super(raw,options);
+        super(raw, options);
 
-        this.log('Forge prompt reader start');     
+        this.log('Forge prompt reader start');
 
         this.positive = '';
-        this.negative = '';  
-        this.lora = '';  
+        this.negative = '';
+        this.lora = '';
         this.params = [];
+        this.llmSystem = '';   // <-- новое поле
+        this.llmUser = '';     // <-- новое поле
     }
 
     run() {
@@ -17,7 +19,6 @@ export default class ForgeUI extends BaseFormat {
       try {
 
         this.log('Start parce');      
-
         this.log(this.raw);      
 
         let lines = this.raw.split('\n');   
@@ -28,7 +29,7 @@ export default class ForgeUI extends BaseFormat {
           last_line = lines[lines.length - 1];
         } 
 
-       this.log(lines.length);    
+        this.log(lines.length);    
 
         //cut last line
         let first_line = '';
@@ -40,40 +41,81 @@ export default class ForgeUI extends BaseFormat {
           first_line = without_last.join('\n');
         }
 
-        let positive = "";
-        let negative = "";
-        const separator = "Negative prompt:";
-        if (first_line.includes(separator)) {
-          const separatorIndex = first_line.indexOf(separator);
-          positive = first_line.slice(0, separatorIndex).trim();
-          negative = first_line.slice(separatorIndex + separator.length).trim();
-        } 
-        else {
-          positive = first_line.trim();
-        }
-        this.log(`Positive prompt: ${positive}`)
-        this.log(`Negative prompt: ${negative}`)
-
-        //get loras
-        const lora = positive.match(/<[^>]+>/g);
-        this.log(`LoRAs: ${lora}`)
-        this.log(`Last line: ${last_line}`)    
-
+        // === 1. Сначала извлекаем LoRA (<...>) ===
+        const lora = first_line.match(/<[^>]+>/g);
+        this.log(`LoRAs: ${lora}`);
         this.lora = lora;
 
-        //cat loras
-        positive = positive.replace(/<[^>]+>/g,"");
+        // Удаляем LoRA из строки для чистого парсинга секций
+        let parseLine = first_line.replace(/<[^>]+>/g, "");
 
-        //fix
+        let positive = "";
+        let negative = "";
+        let llmSystem = "";
+        let llmUser = "";
+
+        // === 2. Сепараторы ===
+        const sepNegative = "Negative prompt:";
+        const sepUser = "LLM_user_prompt:";
+        const sepSystem = "LLM_system_prompt:";
+
+        // === 3. Обрезаем с конца в обратном порядке ===
+        // Negative prompt: идёт последним
+        if (parseLine.includes(sepNegative)) {
+            const idx = parseLine.lastIndexOf(sepNegative);
+            negative = parseLine.slice(idx + sepNegative.length).trim();
+            parseLine = parseLine.slice(0, idx);
+        }
+
+        // LLM_user_prompt: идёт перед негативом
+        if (parseLine.includes(sepUser)) {
+            const idx = parseLine.lastIndexOf(sepUser);
+            llmUser = parseLine.slice(idx + sepUser.length).trim();
+            parseLine = parseLine.slice(0, idx);
+        }
+
+        // LLM_system_prompt: идёт перед юзером
+        if (parseLine.includes(sepSystem)) {
+            const idx = parseLine.lastIndexOf(sepSystem);
+            llmSystem = parseLine.slice(idx + sepSystem.length).trim();
+            parseLine = parseLine.slice(0, idx);
+        }
+
+        // === 4. Всё, что осталось в начале — positive ===
+        positive = parseLine.trim();
+
+        // === 5. Очистка краёв ===
         positive = this.cleanEdges(positive);
         negative = this.cleanEdges(negative);
+        llmSystem = this.cleanEdges(llmSystem);
+        llmUser = this.cleanEdges(llmUser);
 
+        // === 6. Финальная подчистка positive от возможных остатков <...> ===
+        positive = positive.replace(/<[^>]+>/g, "").trim();
+
+        // === 7. Логирование ===
+        this.log(`Positive prompt: ${positive}`);
+        this.log(`Negative prompt: ${negative}`);
+        this.log(`LLM system prompt: ${llmSystem}`);
+        this.log(`LLM user prompt: ${llmUser}`);
+
+        // === 8. Сохранение в поля класса ===
         this.positive = positive;
         this.negative = negative;
+        this.llmSystem = llmSystem;
+        this.llmUser = llmUser;
 
-        //generate prompt   
+        // === 9. Генерируем результат ===   
         let result = {};
         result["Prompt:<br>"] = `${this.escapeHTML(positive)}`;
+
+        if (llmSystem !== "") {
+           result["LLM_system_prompt:<br>"] = `${this.escapeHTML(llmSystem)}`;
+        }
+
+        if (llmUser !== "") {
+           result["LLM_user_prompt:<br>"] = `${this.escapeHTML(llmUser)}`;
+        }
 
         if (negative !== "") {
            result["Negative Prompt:<br>"] = `${this.escapeHTML(negative)}`;
@@ -82,7 +124,16 @@ export default class ForgeUI extends BaseFormat {
         if (lora) {
           let lora_text = "";
           for (let i = 0; i < lora.length; i++) {
-            const text = lora[i].replace(/<(.*?):(.*?):(.*?)>/g, `&lt$1:${this.options.colors.color_file}$2${this.options.colors.color_default}:${this.options.colors.color_int}$3${this.options.colors.color_default}&gt`);
+            const pattern = /<(.*?):(.*?)(?::(.*?))?>/g;        
+            const text = lora[i].replace(pattern, (match, prefix, name, weight) => {
+                if (weight !== undefined) {
+                    // Вариант с весом: <lora:name:weight>
+                    return `&lt${prefix}:${this.options.colors.color_file}${name}${this.options.colors.color_default}:${this.options.colors.color_int}${weight}${this.options.colors.color_default}&gt`;
+                } else {
+                    // Вариант без веса: <lora:name>
+                    return `&lt${prefix}:${this.options.colors.color_file}${name}${this.options.colors.color_default}&gt`;
+                }
+            });
             lora_text = lora_text + "<br>" + text;
           }
           result["LoRA:"] = `${lora_text}`;
@@ -95,11 +146,11 @@ export default class ForgeUI extends BaseFormat {
           const text = `${this.escapeHTML(obj.value)}`;  
 
           if (this.isNumber(obj.value)) {
-              result[`${key}: `] = `${this.options.colors.color_int}${text}`
+              result[`${key}: `] = `${this.options.colors.color_int}${text}`;
           } else if (key == "Model") {
-              result[`${key}: `] = `${this.options.colors.color_file}${text}`
+              result[`${key}: `] = `${this.options.colors.color_file}${text}`;
           } else {
-              result[`${key}: `] = `${text}`
+              result[`${key}: `] = `${text}`;
           }  
         }
 
@@ -245,18 +296,9 @@ export default class ForgeUI extends BaseFormat {
             return parts;
 
         } catch (error) {
-            this.log("Eroor in parseCivitAIblock: ", error.message);
+            this.log("Error in parseCivitAIblock: ", error.message);
             return [];
         }
     }
 
 }
-
-
-
-
-
-
-    
-
-

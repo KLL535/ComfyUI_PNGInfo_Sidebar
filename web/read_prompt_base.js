@@ -14,7 +14,7 @@ export default class BaseFormat {
     }
 
     get output() {
-        return this._output;
+        return this._output || {};
     }
 
     escapeHTML(text) {
